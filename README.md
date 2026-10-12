@@ -10,6 +10,31 @@ character, and whether a volatility-aware adaptive window can recover it.
 
 ---
 
+## Results at a glance
+
+![Four configurations compared on the early-2022 regime shift](figures/summary_metrics.png)
+
+Trained through the 2021 bull market, tested on the first ~40 trading days of 2022. All four
+configurations run on the same test window, so every bar is directly comparable.
+
+- **The static baseline fails comprehensively.** Under a long/flat strategy it forgoes **78.4%**
+  of a perfect-foresight strategy's return on TSLA and **70.6%** on NVDA. Its kernel learned that
+  prices trend upward, and it keeps predicting upward through a crash.
+- **The adaptive window buys most of that back where it matters.** Lowest forgone return of any
+  configuration on GOOGL (29.7% against 36.0%) and MSFT (25.0% against 30.1%), and the lowest
+  RMSE on MSFT (6.27 against 8.52) and NDX (304 against 436).
+- **It does not win everywhere, and the failure is informative.** On TSLA the adaptive model is
+  the worst of the three retraining configurations — 73.5% against 61.6% for the 30-day and 57.9%
+  for the 200-day window — and its window spends most of that run pinned at its 15-day floor.
+  Discarding stale data is the mechanism, and on a persistently volatile instrument it discards
+  too much.
+- **Direction accuracy barely separates the four configurations.** Only MSFT shows a gap worth
+  reading (56.4% against 51.3%); on two of the five tickers the top DA is a tie.
+
+Section 3 gives the full tables, including RMSE and MAPE; section 4 shows how to reproduce them.
+
+---
+
 ## 1. Problem
 
 Gaussian process regression is a Bayesian non-parametric regressor: it places a prior over
@@ -29,6 +54,13 @@ forecast into the early-2022 crash:
   the model stays long through the entire drawdown.
 - It has **no mechanism to detect that it is wrong**, because nothing in the fixed prior
   represents "the regime has changed."
+
+![TSLA: static GPR trained on 2021, tested on early 2022](figures/group1_B/Group1_Baseline_TSLA_2022Test.png)
+
+*TSLA — the worst case. **Top:** the frozen kernel repeats the uptrend it was trained on. In the
+first days the dashed prediction rises while the true price falls, and it stays above the price
+for most of the window. **Bottom:** forgone return accumulates in steps to 78.38%. Produced by
+`code/group1_B.py`.*
 
 **The question this project asks:** how much does that cost, and how much of it can a cheap
 change to the training window recover?
@@ -127,7 +159,7 @@ crash. This is the predicted failure mode, at a magnitude that needs no argument
 | :--- | :--- |
 | **G3 adaptive** | Lowest Regret on GOOGL (29.70%) and MSFT (24.96%); lowest RMSE on MSFT (6.27) and NDX (304.05); highest DA on GOOGL, MSFT and NVDA |
 | **G2 long (200d)** | Lowest RMSE and Regret on TSLA — the single best configuration for that ticker |
-| **G2 short (30d)** | Wins nothing outright, but ties the best DA on TSLA and is the cheapest retraining option |
+| **G2 short (30d)** | Wins nothing outright, but ties the best DA on TSLA and NDX and is the cheapest retraining option |
 
 **Where the adaptive model still loses.** On TSLA it is beaten by the fixed 200-day window on
 both metrics (73.50% vs 57.86% Regret). The mechanism works by discarding data, and on an
@@ -182,10 +214,12 @@ baseline's runtime.
 
 ### Direction accuracy
 
-The adaptive model takes the highest DA on three of five tickers (GOOGL, MSFT, NVDA) and ties
-the best on the other two. MSFT reaches **56.4%** against the static baseline's 51.3%. DA is
-computed over ~40-day windows, so it moves in steps of 1/39 ≈ 2.6% — the MSFT gap is meaningful,
-a one-step gap would not be.
+The adaptive model takes the highest DA outright on three of five tickers (GOOGL, MSFT, NVDA),
+ties the best on TSLA (53.8%, level with the 30-day window), and falls short on NDX (48.7%
+against 51.3%). MSFT reaches **56.4%** against the static baseline's 51.3% — the only gap here
+worth reading. DA is computed over a ~40-day window, so it moves in steps of 1/39 ≈ 2.6%: MSFT
+is a two-step gap, and every other comparison in this section is zero or one step apart, which at
+this sample size is not evidence of anything.
 
 ## 4. Reproducibility
 
@@ -225,6 +259,9 @@ python code/group3.py     # adaptive window
 # 3. report figures
 python code/fig1_nonstationarity.py
 python code/fig2_adaptive_window.py
+
+# 4. README summary chart — parses results.md, runs no model
+python code/fig_summary.py
 ```
 
 `clean_features.py` must run first; the group scripts read its output. All paths resolve relative
@@ -268,9 +305,11 @@ adaptive-gpr-stock-forecasting/
 │   ├── group3.py                # adaptive window
 │   ├── baseline.py              # standalone GPR demo + 95% interval coverage check
 │   ├── fig1_nonstationarity.py
-│   └── fig2_adaptive_window.py
+│   ├── fig2_adaptive_window.py
+│   └── fig_summary.py           # draws figures/summary_metrics.png from results.md
 ├── data/                        # NASDAQ daily bars, 2015–2025
 └── figures/                     # results, grouped by experiment
+    └── summary_metrics.png      # the chart at the top of this README
 ```
 
 ## Known limitations
